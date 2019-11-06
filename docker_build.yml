@@ -1,0 +1,85 @@
+- hosts: htpcserver
+  become: yes
+  tasks:
+  - name: Add docker GPG key
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+
+  - name: Install basic list of packages
+    apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg2
+        - software-properties-common
+
+  - name: Add apt repository
+    apt_repository:
+      repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+
+  - name: Install Docker packages
+    apt:
+      name: "{{ packages }}"
+      state: present
+    vars:
+      packages:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+
+  - name: Add user to docker group
+    user:
+      name: "{{ ansible_env.SUDO_USER }}"
+      groups: docker
+      append: yes
+
+  - name: Ensure docker service is enabled
+    systemd:
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: Get latest version number of docker-compose
+    uri:
+      url: https://api.github.com/repos/docker/compose/releases/latest
+      return_content: yes
+    register: dc
+
+  - name: Get URL of docker-compose sha256sum
+    uri:
+      url: "https://github.com/docker/compose/releases/download/{{ dc.json.name }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}.sha256"
+      return_content: yes
+    register: sha
+
+  - name: Get expected sha256sum of docker-compose
+    uri:
+      url: "{{ sha.url }}"
+      return_content: yes
+    register: sha256
+
+  - name: Check local docker-compose
+    stat:
+      path: /usr/local/bin/docker-compose
+      checksum_algorithm: sha256
+    changed_when: false
+    register: f
+
+  - name: Display parameters
+    debug:
+      msg:
+        - "Latest version of docker-compose : {{ dc.json.name }}"
+        - "Exected sha256sum :    {{ sha256.content.split()[0] }}"
+        - "Local File sha256sum : {{ f.stat.checksum | default('File not exist') }}"
+
+  - name: Install docker-compose
+    get_url:
+      url: "https://github.com/docker/compose/releases/download/{{ dc.json.name }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}"
+      dest: /usr/local/bin/docker-compose
+      sha256sum: "{{ sha256.content.split()[0] }}"
+      mode: +x
+    when: ( f.stat.checksum is not defined ) or ( f.stat.checksum != sha256.content.split()[0] )
