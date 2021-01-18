@@ -50,15 +50,13 @@
       return_content: yes
     register: dc
 
-  - name: Get URL of docker-compose sha256sum
-    uri:
-      url: "https://github.com/docker/compose/releases/download/{{ dc.json.name }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}.sha256"
-      return_content: yes
-    register: sha
+  - name: Generate sha256sum URL
+    set_fact:
+      sha256url: "https://github.com/docker/compose/releases/download/{{ dc.json.name }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}.sha256"
 
   - name: Get expected sha256sum of docker-compose
     uri:
-      url: "{{ sha.url }}"
+      url: "{{ sha256url }}"
       return_content: yes
     register: sha256
 
@@ -73,6 +71,7 @@
     debug:
       msg:
         - "Latest version of docker-compose : {{ dc.json.name }}"
+        - "sha256 URL: {{ sha256url }}"
         - "Exected sha256sum :    {{ sha256.content.split()[0] }}"
         - "Local File sha256sum : {{ f.stat.checksum | default('File not exist') }}"
 
