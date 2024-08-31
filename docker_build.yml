@@ -31,6 +31,8 @@
         - docker-ce
         - docker-ce-cli
         - containerd.io
+        - docker-buildx-plugin
+        - docker-compose-plugin
 
   - name: Add user to docker group
     user:
@@ -44,41 +46,3 @@
       state: started
       enabled: yes
 
-  - name: Get latest version number of docker-compose
-    uri:
-      url: https://api.github.com/repos/docker/compose/releases/latest
-      return_content: yes
-    register: dc
-
-  - name: Generate sha256sum URL
-    set_fact:
-      sha256url: "https://github.com/docker/compose/releases/download/{{ dc.json.name }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}.sha256"
-
-  - name: Get expected sha256sum of docker-compose
-    uri:
-      url: "{{ sha256url }}"
-      return_content: yes
-    register: sha256
-
-  - name: Check local docker-compose
-    stat:
-      path: /usr/local/bin/docker-compose
-      checksum_algorithm: sha256
-    changed_when: false
-    register: f
-
-  - name: Display parameters
-    debug:
-      msg:
-        - "Latest version of docker-compose : {{ dc.json.name }}"
-        - "sha256 URL: {{ sha256url }}"
-        - "Exected sha256sum :    {{ sha256.content.split()[0] }}"
-        - "Local File sha256sum : {{ f.stat.checksum | default('File not exist') }}"
-
-  - name: Install docker-compose
-    get_url:
-      url: "https://github.com/docker/compose/releases/download/{{ dc.json.name }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}"
-      dest: /usr/local/bin/docker-compose
-      sha256sum: "{{ sha256.content.split()[0] }}"
-      mode: +x
-    when: ( f.stat.checksum is not defined ) or ( f.stat.checksum != sha256.content.split()[0] )
